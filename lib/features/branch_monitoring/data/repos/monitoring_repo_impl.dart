@@ -5,8 +5,8 @@ import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/m
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/monitoring_update.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/repos/monitoring_repo.dart';
 
-class MonitoringRepositoryImpl implements MonitoringRepository {
-  MonitoringRepositoryImpl(this._api);
+class MonitoringRepoImpl implements MonitoringRepo {
+  MonitoringRepoImpl(this._api);
 
   final MonitoringApi _api;
 

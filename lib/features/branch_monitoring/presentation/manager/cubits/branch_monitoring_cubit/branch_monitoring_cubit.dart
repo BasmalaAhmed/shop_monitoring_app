@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/data/datasources/connectivity_service.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/branch.dart';
+import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/gold_price.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/monitoring_snapshot.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/monitoring_update.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/repos/gold_price_repo.dart';
@@ -12,14 +13,14 @@ import 'package:shop_monitoring_app/features/branch_monitoring/presentation/mana
 
 class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
   BranchMonitoringCubit({
-    required this._monitoringRepository,
-    required this._goldPriceRepository,
+    required this._monitoringRepo,
+    required this._goldPriceRepo,
     required this._connectivity,
     required this._updateProcessor,
   }) : super(const BranchMonitoringInitial());
 
-  final MonitoringRepository _monitoringRepository;
-  final GoldPriceRepository _goldPriceRepository;
+  final MonitoringRepo _monitoringRepo;
+  final GoldPriceRepo _goldPriceRepo;
   final ConnectivityService _connectivity;
   final MonitoringUpdateProcessor _updateProcessor;
 
@@ -41,7 +42,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     emit(const BranchMonitoringLoading());
 
     try {
-      final branches = await _monitoringRepository.getBranches();
+      final branches = await _monitoringRepo.getBranches();
 
       final requestId = ++_requestId;
 
@@ -91,11 +92,11 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     if (isClosed || requestId != _requestId) return;
 
     try {
-      _updatesSubscription = _monitoringRepository
+      _updatesSubscription = _monitoringRepo
           .watchUpdates(scopeId)
           .listen(_handleUpdate);
 
-      final snapshot = await _monitoringRepository.getSnapshot(scopeId);
+      final snapshot = await _monitoringRepo.getSnapshot(scopeId);
 
       if (isClosed || requestId != _requestId) return;
 
@@ -200,7 +201,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     final requestId = _requestId;
 
     try {
-      final snapshot = await _monitoringRepository.getSnapshot(scopeId);
+      final snapshot = await _monitoringRepo.getSnapshot(scopeId);
 
       if (isClosed || requestId != _requestId || scopeId != _selectedScopeId) {
         return;
@@ -243,22 +244,39 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
   void _watchGoldPrice() {
     _goldPriceSubscription?.cancel();
 
-    _goldPriceSubscription = _goldPriceRepository.watchGoldPrice().listen((
+    _goldPriceSubscription = _goldPriceRepo.watchGoldPrice().listen((
       goldPrice,
     ) {
-      final currentState = state;
-
-      if (currentState is! BranchMonitoringSuccess) return;
-
-      final currentGoldPrice = currentState.goldPrice;
-
-      if (currentGoldPrice != null &&
-          goldPrice.sequence <= currentGoldPrice.sequence) {
-        return;
-      }
-
-      emit(currentState.copyWith(goldPrice: goldPrice));
+      _updateGoldPriceIfNewer(goldPrice);
     });
+
+    _loadInitialGoldPrice();
+  }
+
+  Future<void> _loadInitialGoldPrice() async {
+    try {
+      final goldPrice = await _goldPriceRepo.getGoldPrice();
+
+      if (isClosed) return;
+
+      _updateGoldPriceIfNewer(goldPrice);
+    } catch (_) {
+    }
+  }
+
+  void _updateGoldPriceIfNewer(GoldPrice goldPrice) {
+    final currentState = state;
+
+    if (currentState is! BranchMonitoringSuccess) return;
+
+    final currentGoldPrice = currentState.goldPrice;
+
+    if (currentGoldPrice != null &&
+        goldPrice.sequence <= currentGoldPrice.sequence) {
+      return;
+    }
+
+    emit(currentState.copyWith(goldPrice: goldPrice));
   }
 
   void _watchConnectivity() {
@@ -288,7 +306,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     emit(currentState.copyWith(isRefreshing: true));
 
     try {
-      final snapshot = await _monitoringRepository.getSnapshot(scopeId);
+      final snapshot = await _monitoringRepo.getSnapshot(scopeId);
 
       if (isClosed ||
           refreshRequestId != _refreshRequestId ||

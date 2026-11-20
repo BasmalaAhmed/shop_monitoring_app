@@ -3,8 +3,8 @@ import 'package:shop_monitoring_app/features/branch_monitoring/data/datasources/
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/gold_price.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/repos/gold_price_repo.dart';
 
-class GoldPriceRepositoryImpl implements GoldPriceRepository {
-  GoldPriceRepositoryImpl(this._api);
+class GoldPriceRepoImpl implements GoldPriceRepo {
+  GoldPriceRepoImpl(this._api);
 
   final GoldPriceApi _api;
 

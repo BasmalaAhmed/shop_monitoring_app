@@ -14,8 +14,8 @@ import 'package:shop_monitoring_app/features/branch_monitoring/presentation/mana
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_state.dart';
 
 void main() {
-  late FakeMonitoringRepository monitoringRepository;
-  late FakeGoldPriceRepository goldPriceRepository;
+  late FakeMonitoringRepo monitoringRepo;
+  late FakeGoldPriceRepo goldPriceRepo;
   late FakeConnectivityService connectivity;
   late BranchMonitoringCubit cubit;
 
@@ -37,26 +37,26 @@ void main() {
   }
 
   setUp(() {
-    monitoringRepository = FakeMonitoringRepository();
+    monitoringRepo = FakeMonitoringRepo();
 
-    goldPriceRepository = FakeGoldPriceRepository();
+    goldPriceRepo = FakeGoldPriceRepo();
 
     connectivity = FakeConnectivityService();
 
-    monitoringRepository.branches = const [
+    monitoringRepo.branches = const [
       Branch(id: 'a1', name: 'فرع القاهرة'),
       Branch(id: 'a2', name: 'فرع الإسكندرية'),
     ];
 
-    monitoringRepository.snapshots = {
+    monitoringRepo.snapshots = {
       'all': createSnapshot(scopeId: 'all'),
       'a1': createSnapshot(scopeId: 'a1'),
       'a2': createSnapshot(scopeId: 'a2'),
     };
 
     cubit = BranchMonitoringCubit(
-      monitoringRepository: monitoringRepository,
-      goldPriceRepository: goldPriceRepository,
+      monitoringRepo: monitoringRepo,
+      goldPriceRepo: goldPriceRepo,
       connectivity: connectivity,
       updateProcessor: const MonitoringUpdateProcessor(),
     );
@@ -64,8 +64,8 @@ void main() {
 
   tearDown(() async {
     await cubit.close();
-    await monitoringRepository.dispose();
-    await goldPriceRepository.dispose();
+    await monitoringRepo.dispose();
+    await goldPriceRepo.dispose();
     await connectivity.dispose();
   });
 
@@ -97,8 +97,8 @@ void main() {
         createdAt: now,
       );
 
-      monitoringRepository.emitUpdate('all', update);
-      monitoringRepository.emitUpdate('all', update);
+      monitoringRepo.emitUpdate('all', update);
+      monitoringRepo.emitUpdate('all', update);
 
       final state = cubit.state as BranchMonitoringSuccess;
 
@@ -110,7 +110,7 @@ void main() {
     test('recovers snapshot when a sequence gap is detected', () async {
       await loadCubit();
 
-      monitoringRepository.snapshotHandler = (scopeId) async {
+      monitoringRepo.snapshotHandler = (scopeId) async {
         if (scopeId == 'all') {
           return createSnapshot(
             scopeId: 'all',
@@ -120,7 +120,7 @@ void main() {
           );
         }
 
-        return monitoringRepository.snapshots[scopeId]!;
+        return monitoringRepo.snapshots[scopeId]!;
       };
 
       final update = MonitoringUpdate(
@@ -131,7 +131,7 @@ void main() {
         createdAt: now,
       );
 
-      monitoringRepository.emitUpdate('all', update);
+      monitoringRepo.emitUpdate('all', update);
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
@@ -148,7 +148,7 @@ void main() {
       final delayedResponse = Completer<MonitoringSnapshot>();
       final firstRequestStarted = Completer<void>();
 
-      monitoringRepository.snapshotHandler = (scopeId) async {
+      monitoringRepo.snapshotHandler = (scopeId) async {
         if (scopeId == 'a1') {
           if (!firstRequestStarted.isCompleted) {
             firstRequestStarted.complete();
@@ -157,7 +157,7 @@ void main() {
           return delayedResponse.future;
         }
 
-        return monitoringRepository.snapshots[scopeId]!;
+        return monitoringRepo.snapshots[scopeId]!;
       };
 
       final firstSelection = cubit.selectScope('a1');
@@ -181,7 +181,7 @@ void main() {
 
       var recoveryAttempts = 0;
 
-      monitoringRepository.snapshotHandler = (scopeId) async {
+      monitoringRepo.snapshotHandler = (scopeId) async {
         recoveryAttempts++;
 
         if (recoveryAttempts == 1) {
@@ -204,7 +204,7 @@ void main() {
         createdAt: now,
       );
 
-      monitoringRepository.emitUpdate('all', update);
+      monitoringRepo.emitUpdate('all', update);
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
@@ -224,7 +224,7 @@ void main() {
     test('applies pending updates when missing update arrives', () async {
       await loadCubit();
 
-      monitoringRepository.emitUpdate(
+      monitoringRepo.emitUpdate(
         'all',
         MonitoringUpdate(
           scopeId: 'all',
@@ -237,7 +237,7 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      monitoringRepository.emitUpdate(
+      monitoringRepo.emitUpdate(
         'all',
         MonitoringUpdate(
           scopeId: 'all',
@@ -263,7 +263,7 @@ void main() {
       final initialSales = initialState.snapshot.summary.totalSales;
       final initialCash = initialState.snapshot.summary.totalCash;
 
-      goldPriceRepository.emitPrice(
+      goldPriceRepo.emitPrice(
         GoldPrice(value: 4200, sequence: 1, updatedAt: now),
       );
 
@@ -282,14 +282,13 @@ void main() {
     test('ignores outdated and duplicate gold price updates', () async {
       await loadCubit();
 
-      goldPriceRepository.emitPrice(
+      goldPriceRepo.emitPrice(
         GoldPrice(value: 4200, sequence: 2, updatedAt: now),
       );
 
       await Future<void>.delayed(Duration.zero);
 
-      // Older update.
-      goldPriceRepository.emitPrice(
+      goldPriceRepo.emitPrice(
         GoldPrice(value: 4100, sequence: 1, updatedAt: now),
       );
 
@@ -300,7 +299,7 @@ void main() {
       expect(state.goldPrice?.value, 4200);
       expect(state.goldPrice?.sequence, 2);
 
-      goldPriceRepository.emitPrice(
+      goldPriceRepo.emitPrice(
         GoldPrice(value: 4200, sequence: 2, updatedAt: now),
       );
 
@@ -317,7 +316,7 @@ void main() {
   final oldRequest = Completer<MonitoringSnapshot>();
   var requestCount = 0;
 
-  monitoringRepository.snapshotHandler = (scopeId) {
+  monitoringRepo.snapshotHandler = (scopeId) {
     requestCount++;
 
     if (requestCount == 1) {
@@ -334,17 +333,14 @@ void main() {
     );
   };
 
-  // Start the first refresh and keep its response pending.
   final firstRefresh = cubit.refresh();
 
   await Future<void>.delayed(Duration.zero);
 
-  // Start a newer refresh and let it complete first.
   final secondRefresh = cubit.refresh();
 
   await secondRefresh;
 
-  // The older response arrives afterward.
   oldRequest.complete(
     createSnapshot(
       scopeId: 'all',
@@ -366,7 +362,7 @@ void main() {
   });
 }
 
-class FakeMonitoringRepository implements MonitoringRepository {
+class FakeMonitoringRepo implements MonitoringRepo {
   List<Branch> branches = [];
 
   Map<String, MonitoringSnapshot> snapshots = {};
@@ -408,8 +404,9 @@ class FakeMonitoringRepository implements MonitoringRepository {
   }
 }
 
-class FakeGoldPriceRepository implements GoldPriceRepository {
+class FakeGoldPriceRepo implements GoldPriceRepo {
   final _controller = StreamController<GoldPrice>.broadcast();
+
 
   @override
   Future<GoldPrice> getGoldPrice() async {
