@@ -28,6 +28,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
   StreamSubscription<bool>? _connectivitySubscription;
 
   int _requestId = 0;
+  int _refreshRequestId = 0;
   String _selectedScopeId = 'all';
 
   final List<MonitoringUpdate> _pendingUpdates = [];
@@ -49,6 +50,8 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
         branches: branches,
         requestId: requestId,
       );
+
+      if (isClosed || requestId != _requestId) return;
 
       _watchGoldPrice();
       _watchConnectivity();
@@ -278,14 +281,19 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     final currentState = state;
     if (currentState is! BranchMonitoringSuccess) return;
 
+    final refreshRequestId = ++_refreshRequestId;
+    final requestId = _requestId;
+    final scopeId = _selectedScopeId;
+
     emit(currentState.copyWith(isRefreshing: true));
 
     try {
-      final snapshot = await _monitoringRepository.getSnapshot(
-        _selectedScopeId,
-      );
+      final snapshot = await _monitoringRepository.getSnapshot(scopeId);
 
-      if (isClosed || _selectedScopeId != currentState.selectedScopeId) {
+      if (isClosed ||
+          refreshRequestId != _refreshRequestId ||
+          requestId != _requestId ||
+          scopeId != _selectedScopeId) {
         return;
       }
 
@@ -299,9 +307,12 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
       _emitUpdatedSnapshot();
     } catch (_) {
     } finally {
-      final latestState = state;
-      if (!isClosed && latestState is BranchMonitoringSuccess) {
-        emit(latestState.copyWith(isRefreshing: false));
+      if (!isClosed && refreshRequestId == _refreshRequestId) {
+        final latestState = state;
+
+        if (latestState is BranchMonitoringSuccess) {
+          emit(latestState.copyWith(isRefreshing: false));
+        }
       }
     }
   }

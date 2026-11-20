@@ -311,6 +311,58 @@ void main() {
       expect(state.goldPrice?.value, 4200);
       expect(state.goldPrice?.sequence, 2);
     });
+    test('ignores outdated refresh response when a newer refresh completes', () async {
+  await loadCubit();
+
+  final oldRequest = Completer<MonitoringSnapshot>();
+  var requestCount = 0;
+
+  monitoringRepository.snapshotHandler = (scopeId) {
+    requestCount++;
+
+    if (requestCount == 1) {
+      return oldRequest.future;
+    }
+
+    return Future.value(
+      createSnapshot(
+        scopeId: 'all',
+        sequence: 1,
+        sales: 101000,
+        cash: 50500,
+      ),
+    );
+  };
+
+  // Start the first refresh and keep its response pending.
+  final firstRefresh = cubit.refresh();
+
+  await Future<void>.delayed(Duration.zero);
+
+  // Start a newer refresh and let it complete first.
+  final secondRefresh = cubit.refresh();
+
+  await secondRefresh;
+
+  // The older response arrives afterward.
+  oldRequest.complete(
+    createSnapshot(
+      scopeId: 'all',
+      sequence: 0,
+      sales: 100000,
+      cash: 50000,
+    ),
+  );
+
+  await firstRefresh;
+
+  final state = cubit.state as BranchMonitoringSuccess;
+
+  expect(state.snapshot.sequence, 1);
+  expect(state.snapshot.summary.totalSales, 101000);
+  expect(state.snapshot.summary.totalCash, 50500);
+  expect(state.isRefreshing, false);
+});
   });
 }
 
