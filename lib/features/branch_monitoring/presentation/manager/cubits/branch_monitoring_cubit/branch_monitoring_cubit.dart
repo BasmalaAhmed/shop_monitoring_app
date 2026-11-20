@@ -245,9 +245,16 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     ) {
       final currentState = state;
 
-      if (currentState is BranchMonitoringSuccess) {
-        emit(currentState.copyWith(goldPrice: goldPrice));
+      if (currentState is! BranchMonitoringSuccess) return;
+
+      final currentGoldPrice = currentState.goldPrice;
+
+      if (currentGoldPrice != null &&
+          goldPrice.sequence <= currentGoldPrice.sequence) {
+        return;
       }
+
+      emit(currentState.copyWith(goldPrice: goldPrice));
     });
   }
 

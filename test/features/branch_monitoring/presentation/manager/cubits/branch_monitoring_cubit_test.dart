@@ -224,7 +224,6 @@ void main() {
     test('applies pending updates when missing update arrives', () async {
       await loadCubit();
 
-      // Update 2 arrives first, so it should be pending.
       monitoringRepository.emitUpdate(
         'all',
         MonitoringUpdate(
@@ -238,7 +237,6 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      // Update 1 arrives afterward.
       monitoringRepository.emitUpdate(
         'all',
         MonitoringUpdate(
@@ -255,6 +253,63 @@ void main() {
       expect(state.snapshot.sequence, 2);
       expect(state.snapshot.summary.totalSales, 103000);
       expect(state.snapshot.summary.totalCash, 51500);
+    });
+    test('updates gold price without changing branch snapshot', () async {
+      await loadCubit();
+
+      final initialState = cubit.state as BranchMonitoringSuccess;
+
+      final initialSequence = initialState.snapshot.sequence;
+      final initialSales = initialState.snapshot.summary.totalSales;
+      final initialCash = initialState.snapshot.summary.totalCash;
+
+      goldPriceRepository.emitPrice(
+        GoldPrice(value: 4200, sequence: 1, updatedAt: now),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      final updatedState = cubit.state as BranchMonitoringSuccess;
+
+      expect(updatedState.goldPrice?.value, 4200);
+      expect(updatedState.goldPrice?.sequence, 1);
+
+      expect(updatedState.snapshot.sequence, initialSequence);
+      expect(updatedState.snapshot.summary.totalSales, initialSales);
+      expect(updatedState.snapshot.summary.totalCash, initialCash);
+    });
+
+    test('ignores outdated and duplicate gold price updates', () async {
+      await loadCubit();
+
+      goldPriceRepository.emitPrice(
+        GoldPrice(value: 4200, sequence: 2, updatedAt: now),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      // Older update.
+      goldPriceRepository.emitPrice(
+        GoldPrice(value: 4100, sequence: 1, updatedAt: now),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      var state = cubit.state as BranchMonitoringSuccess;
+
+      expect(state.goldPrice?.value, 4200);
+      expect(state.goldPrice?.sequence, 2);
+
+      goldPriceRepository.emitPrice(
+        GoldPrice(value: 4200, sequence: 2, updatedAt: now),
+      );
+
+      await Future<void>.delayed(Duration.zero);
+
+      state = cubit.state as BranchMonitoringSuccess;
+
+      expect(state.goldPrice?.value, 4200);
+      expect(state.goldPrice?.sequence, 2);
     });
   });
 }
@@ -317,6 +372,10 @@ class FakeGoldPriceRepository implements GoldPriceRepository {
   Stream<GoldPrice> watchGoldPrice() => _controller.stream;
 
   Future<void> dispose() => _controller.close();
+
+  void emitPrice(GoldPrice price) {
+    _controller.add(price);
+  }
 }
 
 class FakeConnectivityService implements ConnectivityService {
