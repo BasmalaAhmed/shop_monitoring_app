@@ -14,7 +14,7 @@ void main() {
 
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('مراقبة الفروع'), findsOneWidget);
+    expect(find.text('لوحة متابعة الفروع'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
     await disposeDependencies();
