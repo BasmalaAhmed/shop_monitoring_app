@@ -62,18 +62,71 @@ class BranchMonitoringHome extends StatelessWidget {
           }
 
           if (state is BranchMonitoringSuccess) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('النطاق: ${state.selectedScopeId}'),
-                  Text('إجمالي المبيعات: ${state.snapshot.summary.totalSales}'),
-                  Text('إجمالي السيولة: ${state.snapshot.summary.totalCash}'),
-                  Text('سعر الذهب: ${state.goldPrice?.value ?? "غير متاح"}'),
-                  Text(state.isOnline ? 'متصل بالإنترنت' : 'غير متصل'),
-                  if (state.isRefreshing) const CircularProgressIndicator(),
-                ],
-              ),
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Text('النطاق: ${state.selectedScopeId}'),
+                DropdownButton<String>(
+                  value: state.selectedScopeId,
+                  isExpanded: true,
+                  hint: const Text('اختاري الفرع'),
+                  items: [
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('كل الفروع'),
+                    ),
+                    ...state.branches.map(
+                      (branch) => DropdownMenuItem(
+                        value: branch.id,
+                        child: Text(branch.name),
+                      ),
+                    ),
+                  ],
+                  onChanged: (scopeId) {
+                    if (scopeId != null) {
+                      context.read<BranchMonitoringCubit>().selectScope(
+                        scopeId,
+                      );
+                    }
+                  },
+                ),
+                Text('إجمالي المبيعات: ${state.snapshot.summary.totalSales}'),
+                Text('إجمالي السيولة: ${state.snapshot.summary.totalCash}'),
+                Text('سعر الذهب: ${state.goldPrice?.value ?? "غير متاح"}'),
+                Text(state.isOnline ? 'متصل بالإنترنت' : 'غير متصل'),
+                if (state.isRefreshing)
+                  const Center(child: CircularProgressIndicator()),
+
+                const SizedBox(height: 24),
+
+                const Text(
+                  'آخر العمليات',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+
+                const SizedBox(height: 12),
+
+                if (state.snapshot.recentOperations.isEmpty)
+                  const Center(child: Text('لا توجد عمليات حتى الآن'))
+                else
+                  ...state.snapshot.recentOperations.map(
+                    (operation) => Card(
+                      child: ListTile(
+                        leading: const CircleAvatar(
+                          child: Icon(Icons.receipt_long),
+                        ),
+                        title: Text(operation.description),
+                        subtitle: Text(
+                          operation.createdAt.toLocal().toString(),
+                        ),
+                        trailing: Text(
+                          operation.amount.toString(),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             );
           }
 
