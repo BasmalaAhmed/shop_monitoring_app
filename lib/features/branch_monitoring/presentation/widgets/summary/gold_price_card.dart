@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shop_monitoring_app/core/theme/app_colors.dart';
+import 'package:shop_monitoring_app/core/utils/date_time_formatter.dart';
 
 class GoldPriceCard extends StatelessWidget {
   const GoldPriceCard({
@@ -17,10 +18,7 @@ class GoldPriceCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [
-            Color(0xFF164E63),
-            Color(0xFF0F766E),
-          ],
+          colors: [Color(0xFF164E63), Color(0xFF0F766E)],
           begin: AlignmentDirectional.topStart,
           end: AlignmentDirectional.bottomEnd,
         ),
@@ -48,10 +46,7 @@ class GoldPriceCard extends StatelessWidget {
               children: [
                 const Text(
                   'سعر الذهب لعيار 21',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -65,31 +60,16 @@ class GoldPriceCard extends StatelessWidget {
                 if (updatedAt != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'آخر تحديث: ${_formatTime(updatedAt!)}',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    'آخر تحديث: ${DateTimeFormatter.timeOrDateTime(updatedAt!)}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ],
             ),
           ),
-          const Icon(
-            Icons.auto_graph_rounded,
-            color: AppColors.gold,
-            size: 30,
-          ),
+          const Icon(Icons.auto_graph_rounded, color: AppColors.gold, size: 30),
         ],
       ),
     );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    final local = dateTime.toLocal();
-    final hour = local.hour.toString().padLeft(2, '0');
-    final minute = local.minute.toString().padLeft(2, '0');
-
-    return '$hour:$minute';
   }
 }

@@ -13,6 +13,15 @@ class RecentOperationModel {
     required this.at,
   });
 
+  factory RecentOperationModel.fromEntity(RecentOperation operation) {
+    return RecentOperationModel(
+      id: operation.id,
+      title: operation.description,
+      amount: operation.amount,
+      at: operation.createdAt,
+    );
+  }
+
   factory RecentOperationModel.fromJson(Map<String, dynamic> json) {
     return RecentOperationModel(
       id: json['id'] as String,

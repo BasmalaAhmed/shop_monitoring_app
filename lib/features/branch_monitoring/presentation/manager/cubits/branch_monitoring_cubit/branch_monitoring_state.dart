@@ -51,7 +51,15 @@ final class BranchMonitoringSuccess extends BranchMonitoringState {
 }
 
 final class BranchMonitoringFailure extends BranchMonitoringState {
-  const BranchMonitoringFailure(this.errorMessage);
+  const BranchMonitoringFailure(
+    this.errorMessage, {
+    this.previous,
+    this.failedScopeId,
+  });
 
   final String errorMessage;
+
+  final BranchMonitoringSuccess? previous;
+
+  final String? failedScopeId;
 }

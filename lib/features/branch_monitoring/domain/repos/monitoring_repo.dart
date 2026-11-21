@@ -10,4 +10,6 @@ abstract class MonitoringRepo {
   Future<MonitoringSnapshot> getSnapshot(String scopeId);
 
   Stream<MonitoringUpdate> watchUpdates(String scopeId);
+
+    Future<void> cacheSnapshot(MonitoringSnapshot snapshot);
 }

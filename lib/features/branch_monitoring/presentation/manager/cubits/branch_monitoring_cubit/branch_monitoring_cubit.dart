@@ -43,7 +43,6 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
 
     try {
       final branches = await _monitoringRepo.getBranches();
-
       final requestId = ++_requestId;
 
       await _selectScope(
@@ -68,13 +67,69 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
 
     if (scopeId == _selectedScopeId) return;
 
+    final previousScopeId = _selectedScopeId;
+    final previousSnapshot = _currentSnapshot;
+
     final requestId = ++_requestId;
 
-    await _selectScope(
-      scopeId: scopeId,
-      branches: currentState.branches,
-      requestId: requestId,
+    try {
+      await _selectScope(
+        scopeId: scopeId,
+        branches: currentState.branches,
+        requestId: requestId,
+      );
+    } catch (error) {
+      if (isClosed || requestId != _requestId) return;
+
+      await _restoreScope(
+        scopeId: previousScopeId,
+        snapshot: previousSnapshot,
+        requestId: requestId,
+      );
+
+      if (isClosed || requestId != _requestId) return;
+
+      emit(
+        BranchMonitoringFailure(
+          error.toString(),
+          previous: currentState,
+          failedScopeId: scopeId,
+        ),
+      );
+    }
+  }
+
+  void backFromFailure() {
+    final failure = state;
+
+    if (failure is! BranchMonitoringFailure) return;
+
+    final previous = failure.previous;
+
+    if (previous == null) return;
+
+    emit(
+      previous.copyWith(
+        snapshot: _currentSnapshot ?? previous.snapshot,
+        isOnline: _connectivity.isOnline,
+      ),
     );
+  }
+
+    Future<void> retryFromFailure() async {
+    final failure = state;
+
+    if (failure is! BranchMonitoringFailure) return;
+
+    final failedScopeId = failure.failedScopeId;
+
+    if (failure.previous == null || failedScopeId == null) {
+      await load();
+      return;
+    }
+
+    backFromFailure();
+    await selectScope(failedScopeId);
   }
 
   Future<void> _selectScope({
@@ -116,11 +171,31 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
       );
 
       await _processPendingUpdates();
-    } catch (error) {
+    } catch (_) {
       if (isClosed || requestId != _requestId) return;
 
-      emit(BranchMonitoringFailure(error.toString()));
+      rethrow;
     }
+  }
+
+  Future<void> _restoreScope({
+    required String scopeId,
+    required MonitoringSnapshot? snapshot,
+    required int requestId,
+  }) async {
+    await _updatesSubscription?.cancel();
+
+    if (isClosed || requestId != _requestId) return;
+
+    _selectedScopeId = scopeId;
+    _currentSnapshot = snapshot;
+    _snapshotReady = snapshot != null;
+    _isResyncing = false;
+    _pendingUpdates.clear();
+
+    _updatesSubscription = _monitoringRepo
+        .watchUpdates(scopeId)
+        .listen(_handleUpdate);
   }
 
   void _handleUpdate(MonitoringUpdate update) {
@@ -143,6 +218,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     switch (result.status) {
       case UpdateProcessingStatus.applied:
         _currentSnapshot = result.snapshot;
+        _cacheCurrentSnapshot();
         _emitUpdatedSnapshot();
 
         if (_pendingUpdates.isNotEmpty) {
@@ -187,6 +263,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
 
       if (result.status == UpdateProcessingStatus.applied) {
         _currentSnapshot = result.snapshot;
+        _cacheCurrentSnapshot();
         _emitUpdatedSnapshot();
       }
     }
@@ -241,6 +318,13 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     emit(currentState.copyWith(snapshot: snapshot));
   }
 
+  void _cacheCurrentSnapshot() {
+    final snapshot = _currentSnapshot;
+    if (snapshot == null) return;
+
+    unawaited(_monitoringRepo.cacheSnapshot(snapshot).catchError((_) {}));
+  }
+
   void _watchGoldPrice() {
     _goldPriceSubscription?.cancel();
 
@@ -260,8 +344,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
       if (isClosed) return;
 
       _updateGoldPriceIfNewer(goldPrice);
-    } catch (_) {
-    }
+    } catch (_) {}
   }
 
   void _updateGoldPriceIfNewer(GoldPrice goldPrice) {
@@ -291,6 +374,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
 
       if (isOnline) {
         refresh();
+        _loadInitialGoldPrice();
       }
     });
   }

@@ -10,6 +10,7 @@ class MonitoringSnapshotModel {
     required this.totalCash,
     required this.operations,
     required this.updatedAt,
+    this.lastStreamUpdateAt,
   });
 
   final String scopeId;
@@ -18,6 +19,7 @@ class MonitoringSnapshotModel {
   final int totalCash;
   final List<RecentOperationModel> operations;
   final DateTime updatedAt;
+  final DateTime? lastStreamUpdateAt;
 
   factory MonitoringSnapshotModel.fromJson(Map<String, dynamic> json) {
     return MonitoringSnapshotModel(
@@ -36,15 +38,31 @@ class MonitoringSnapshotModel {
     );
   }
 
-  MonitoringSnapshot toEntity() {
+  factory MonitoringSnapshotModel.fromEntity(MonitoringSnapshot snapshot) {
+    return MonitoringSnapshotModel(
+      scopeId: snapshot.scopeId,
+      sequence: snapshot.sequence,
+      totalSales: snapshot.summary.totalSales,
+      totalCash: snapshot.summary.totalCash,
+      operations: snapshot.recentOperations
+          .map(RecentOperationModel.fromEntity)
+          .toList(),
+      updatedAt: snapshot.updatedAt,
+      lastStreamUpdateAt: snapshot.lastStreamUpdateAt,
+    );
+  }
+
+  MonitoringSnapshot toEntity({bool isFromCache = false}) {
     return MonitoringSnapshot(
       scopeId: scopeId,
       sequence: sequence,
+      isFromCache: isFromCache,
       summary: BranchSummary(totalSales: totalSales, totalCash: totalCash),
       recentOperations: operations
           .map((operation) => operation.toEntity())
           .toList(),
       updatedAt: updatedAt,
+      lastStreamUpdateAt: lastStreamUpdateAt,
     );
   }
 }

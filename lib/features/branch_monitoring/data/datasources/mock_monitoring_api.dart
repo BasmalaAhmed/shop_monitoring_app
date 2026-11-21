@@ -58,7 +58,7 @@ class MockMonitoringApi implements MonitoringApi, GoldPriceApi {
 
     _goldPrice = GoldPriceModel(
       value: 4000,
-      sequence: 0,
+      sequence: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       updatedAt: DateTime.now().toUtc(),
     );
   }
@@ -213,7 +213,7 @@ class MockMonitoringApi implements MonitoringApi, GoldPriceApi {
 class _ScopeState {
   _ScopeState({required this.sales, required this.cash});
 
-  int sequence = 0;
+  int sequence = DateTime.now().millisecondsSinceEpoch ~/ 1000;
   int sales;
   int cash;
 

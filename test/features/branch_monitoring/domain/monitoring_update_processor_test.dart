@@ -19,10 +19,7 @@ void main() {
     return MonitoringSnapshot(
       scopeId: 'a1',
       sequence: sequence,
-      summary: BranchSummary(
-        totalSales: sales,
-        totalCash: cash,
-      ),
+      summary: BranchSummary(totalSales: sales, totalCash: cash),
       recentOperations: operations,
       updatedAt: now,
     );
@@ -50,10 +47,7 @@ void main() {
       final snapshot = createSnapshot();
       final update = createUpdate();
 
-      final result = processor.process(
-        current: snapshot,
-        update: update,
-      );
+      final result = processor.process(current: snapshot, update: update);
 
       expect(result.status, UpdateProcessingStatus.applied);
       expect(result.snapshot.sequence, 11);
@@ -61,14 +55,32 @@ void main() {
       expect(result.snapshot.summary.totalCash, 50500);
     });
 
+    test('keeps updatedAt and records stream time separately', () {
+      final streamTime = now.add(const Duration(minutes: 5));
+
+      final snapshot = createSnapshot().copyWith(isFromCache: true);
+
+      final update = MonitoringUpdate(
+        scopeId: 'a1',
+        sequence: 11,
+        salesDelta: 1000,
+        cashDelta: 500,
+        createdAt: streamTime,
+      );
+
+      final result = processor.process(current: snapshot, update: update);
+
+      expect(result.status, UpdateProcessingStatus.applied);
+      expect(result.snapshot.updatedAt, now);
+      expect(result.snapshot.lastStreamUpdateAt, streamTime);
+      expect(result.snapshot.isFromCache, true);
+    });
+
     test('ignores duplicate updates without changing snapshot', () {
       final snapshot = createSnapshot();
       final update = createUpdate(sequence: 10);
 
-      final result = processor.process(
-        current: snapshot,
-        update: update,
-      );
+      final result = processor.process(current: snapshot, update: update);
 
       expect(result.status, UpdateProcessingStatus.duplicate);
       expect(result.snapshot, same(snapshot));
@@ -79,10 +91,7 @@ void main() {
       final snapshot = createSnapshot();
       final update = createUpdate(sequence: 12);
 
-      final result = processor.process(
-        current: snapshot,
-        update: update,
-      );
+      final result = processor.process(current: snapshot, update: update);
 
       expect(result.status, UpdateProcessingStatus.gapDetected);
       expect(result.snapshot, same(snapshot));
@@ -94,10 +103,7 @@ void main() {
       final update = createUpdate(scopeId: 'a2');
 
       expect(
-        () => processor.process(
-          current: snapshot,
-          update: update,
-        ),
+        () => processor.process(current: snapshot, update: update),
         throwsArgumentError,
       );
     });

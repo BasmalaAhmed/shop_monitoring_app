@@ -28,7 +28,7 @@ class MonitoringUpdateProcessor {
       );
     }
 
-   if (update.sequence != current.sequence + 1) {
+    if (update.sequence != current.sequence + 1) {
       return UpdateProcessingResult(
         status: UpdateProcessingStatus.gapDetected,
         snapshot: current,
@@ -40,15 +40,14 @@ class MonitoringUpdateProcessor {
       ...current.recentOperations,
     ].take(20).toList();
 
-    final updatedSnapshot = MonitoringSnapshot(
-      scopeId: current.scopeId,
+    final updatedSnapshot = current.copyWith(
       sequence: update.sequence,
       summary: current.summary.copyWith(
         totalSales: current.summary.totalSales + update.salesDelta,
         totalCash: current.summary.totalCash + update.cashDelta,
       ),
       recentOperations: operations,
-      updatedAt: update.createdAt,
+      lastStreamUpdateAt: update.createdAt,
     );
 
     return UpdateProcessingResult(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shop_monitoring_app/core/utils/date_time_formatter.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_cubit.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_state.dart';
+import 'package:shop_monitoring_app/features/branch_monitoring/presentation/views/failure_view.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/widgets/header/dashboard_header_section.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/widgets/operations/recent_operations_sections.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/widgets/summary/gold_price_card.dart';
@@ -20,9 +22,16 @@ class BranchMonitoringView extends StatelessWidget {
                 state is BranchMonitoringLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-
             if (state is BranchMonitoringFailure) {
-              return const Center(child: Text('حدث خطأ أثناء تحميل البيانات'));
+              return PopScope(
+                canPop: state.previous == null,
+                onPopInvokedWithResult: (didPop, _) {
+                  if (!didPop) {
+                    context.read<BranchMonitoringCubit>().backFromFailure();
+                  }
+                },
+                child: FailureView(canGoBack: state.previous != null),
+              );
             }
 
             if (state is BranchMonitoringSuccess) {
@@ -50,7 +59,50 @@ class BranchMonitoringView extends StatelessWidget {
                                     .selectScope(scopeId);
                               },
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 16),
+
+                            if (!state.isOnline ||
+                                state.snapshot.isFromCache) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.cloud_off_outlined,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surface,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'تعرض آخر البيانات المحفوظة',
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.surface,
+                                        ),
+                                      ),
+                                    ),
+                                    Text(
+                                      'آخر تحديث: ${DateTimeFormatter.timeOrDateTime(state.snapshot.lastDataAt)}',
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.surface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
 
                             SummaryGrid(
                               totalSales: state.snapshot.summary.totalSales,

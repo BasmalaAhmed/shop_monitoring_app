@@ -34,7 +34,7 @@ class RecentOperationsSection extends StatelessWidget {
               )
             else
               ...operations
-                  .take(15)
+                  .take(10)
                   .map(
                     (operation) => Column(
                       children: [
