@@ -60,7 +60,7 @@ class GoldPriceCard extends StatelessWidget {
                 if (updatedAt != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    'آخر تحديث: ${DateTimeFormatter.timeOrDateTime(updatedAt!)}',
+                    'آخر تحديث: ${DateTimeFormatter.time(updatedAt!)}',
                     style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],

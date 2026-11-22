@@ -172,4 +172,73 @@ void main() {
       expect(result!.lastStreamUpdateAt, isNull);
     });
   });
+
+  group('Account data clearing', () {
+    final updatedAt = DateTime.utc(2026, 11, 21, 10, 0);
+
+    Future<void> seed(String accountId) async {
+      await dataSource.cacheBranches(
+        accountId: accountId,
+        branches: const [BranchModel(id: 'a1', name: 'القاهرة')],
+      );
+
+      await dataSource.cacheSnapshot(
+        accountId: accountId,
+        snapshot: MonitoringSnapshotModel(
+          scopeId: 'all',
+          sequence: 1,
+          totalSales: 1000,
+          totalCash: 500,
+          operations: const [],
+          updatedAt: updatedAt,
+        ),
+      );
+
+      await dataSource.cacheGoldPrice(
+        accountId: accountId,
+        goldPrice: GoldPriceModel(
+          value: 4000,
+          sequence: 1,
+          updatedAt: updatedAt,
+        ),
+      );
+    }
+
+    test('clearAccount removes all cached data of that account', () async {
+      await seed('shop_1');
+
+      await dataSource.clearAccount(accountId: 'shop_1');
+
+      expect(await dataSource.getCachedBranches(accountId: 'shop_1'), isNull);
+      expect(
+        await dataSource.getCachedSnapshot(accountId: 'shop_1', scopeId: 'all'),
+        isNull,
+      );
+      expect(await dataSource.getCachedGoldPrice(accountId: 'shop_1'), isNull);
+    });
+
+    test('clearAccount does not touch other accounts', () async {
+      await seed('shop_1');
+      await seed('shop_2');
+
+      await dataSource.clearAccount(accountId: 'shop_1');
+
+      expect(
+        await dataSource.getCachedBranches(accountId: 'shop_2'),
+        isNotNull,
+      );
+      expect(
+        await dataSource.getCachedSnapshot(accountId: 'shop_2', scopeId: 'all'),
+        isNotNull,
+      );
+      expect(
+        await dataSource.getCachedGoldPrice(accountId: 'shop_2'),
+        isNotNull,
+      );
+    });
+
+    test('clearAccount on an account without data does not throw', () async {
+      await dataSource.clearAccount(accountId: 'unknown');
+    });
+  });
 }

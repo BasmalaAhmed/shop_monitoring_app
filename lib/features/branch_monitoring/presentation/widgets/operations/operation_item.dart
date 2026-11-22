@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shop_monitoring_app/core/theme/app_colors.dart';
+import 'package:shop_monitoring_app/core/utils/date_time_formatter.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/recent_operation.dart';
 
 class OperationItem extends StatelessWidget {
-  const OperationItem({
-    super.key,
-    required this.operation,
-  });
+  const OperationItem({super.key, required this.operation});
 
   final RecentOperation operation;
 
   @override
   Widget build(BuildContext context) {
-    final time = operation.createdAt.toLocal();
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
@@ -42,14 +38,10 @@ class OperationItem extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${time.day.toString().padLeft(2, '0')}/'
-                  '${time.month.toString().padLeft(2, '0')}/'
-                  '${time.year} - '
-                  '${time.hour.toString().padLeft(2, '0')}:'
-                  '${time.minute.toString().padLeft(2, '0')}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textMuted,
-                      ),
+                  DateTimeFormatter.dateTime(operation.createdAt),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.textMuted),
                 ),
               ],
             ),
@@ -58,9 +50,9 @@ class OperationItem extends StatelessWidget {
           Text(
             '${operation.amount} جنيه',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.success,
-                  fontWeight: FontWeight.bold,
-                ),
+              color: AppColors.success,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),

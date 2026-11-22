@@ -22,6 +22,7 @@ final class BranchMonitoringSuccess extends BranchMonitoringState {
     required this.goldPrice,
     required this.isOnline,
     this.isRefreshing = false,
+    this.loadingScopeId,
   });
 
   final List<Branch> branches;
@@ -30,6 +31,7 @@ final class BranchMonitoringSuccess extends BranchMonitoringState {
   final GoldPrice? goldPrice;
   final bool isOnline;
   final bool isRefreshing;
+  final String? loadingScopeId;
 
   BranchMonitoringSuccess copyWith({
     List<Branch>? branches,
@@ -38,6 +40,8 @@ final class BranchMonitoringSuccess extends BranchMonitoringState {
     GoldPrice? goldPrice,
     bool? isOnline,
     bool? isRefreshing,
+    String? loadingScopeId,
+    bool clearLoadingScope = false,
   }) {
     return BranchMonitoringSuccess(
       branches: branches ?? this.branches,
@@ -46,6 +50,9 @@ final class BranchMonitoringSuccess extends BranchMonitoringState {
       goldPrice: goldPrice ?? this.goldPrice,
       isOnline: isOnline ?? this.isOnline,
       isRefreshing: isRefreshing ?? this.isRefreshing,
+      loadingScopeId: clearLoadingScope
+          ? null
+          : (loadingScopeId ?? this.loadingScopeId),
     );
   }
 }
@@ -55,11 +62,12 @@ final class BranchMonitoringFailure extends BranchMonitoringState {
     this.errorMessage, {
     this.previous,
     this.failedScopeId,
+    this.isNetworkError = false,
   });
 
   final String errorMessage;
-
   final BranchMonitoringSuccess? previous;
-
   final String? failedScopeId;
+
+  final bool isNetworkError;
 }

@@ -1,17 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shop_monitoring_app/core/errors/network_exception.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/branch.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/branch_summary.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/gold_price.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/monitoring_snapshot.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/monitoring_update.dart';
-import 'package:shop_monitoring_app/features/branch_monitoring/domain/repos/gold_price_repo.dart';
-import 'package:shop_monitoring_app/features/branch_monitoring/domain/repos/monitoring_repo.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/usecases/monitoring_update_processor.dart';
-import 'package:shop_monitoring_app/features/branch_monitoring/data/datasources/connectivity_service.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_cubit.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_state.dart';
+
+import '../../../../../helpers/fake_monitoring_dependencies.dart';
 
 void main() {
   late FakeMonitoringRepo monitoringRepo;
@@ -474,90 +474,321 @@ void main() {
 
       expect(monitoringRepo.cachedSnapshots.length, 1);
     });
-  });
-}
 
-class FakeMonitoringRepo implements MonitoringRepo {
-  List<Branch> branches = [];
+    test('updates isOnline when connectivity changes', () async {
+      await loadCubit();
 
-  Map<String, MonitoringSnapshot> snapshots = {};
+      expect((cubit.state as BranchMonitoringSuccess).isOnline, true);
 
-  Future<MonitoringSnapshot> Function(String scopeId)? snapshotHandler;
+      connectivity.setOnline(false);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-  final Map<String, StreamController<MonitoringUpdate>> _controllers = {};
+      expect((cubit.state as BranchMonitoringSuccess).isOnline, false);
+    });
 
-  @override
-  Future<List<Branch>> getBranches() async => branches;
+    test(
+      'refreshes snapshot and gold price when connectivity returns',
+      () async {
+        await loadCubit();
 
-  @override
-  Future<MonitoringSnapshot> getSnapshot(String scopeId) async {
-    if (snapshotHandler != null) {
-      return snapshotHandler!(scopeId);
-    }
+        connectivity.setOnline(false);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-    return snapshots[scopeId]!;
-  }
+        final goldCallsBefore = goldPriceRepo.getGoldPriceCalls;
+        final syncedAt = now.add(const Duration(minutes: 10));
 
-  final List<MonitoringSnapshot> cachedSnapshots = [];
+        monitoringRepo.snapshotHandler = (scopeId) async {
+          return MonitoringSnapshot(
+            scopeId: scopeId,
+            sequence: 0,
+            summary: BranchSummary(totalSales: 100000, totalCash: 50000),
+            recentOperations: const [],
+            updatedAt: syncedAt,
+          );
+        };
 
-  @override
-  Future<void> cacheSnapshot(MonitoringSnapshot snapshot) async {
-    cachedSnapshots.add(snapshot);
-  }
+        connectivity.setOnline(true);
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-  @override
-  Stream<MonitoringUpdate> watchUpdates(String scopeId) {
-    return _controllers
-        .putIfAbsent(
-          scopeId,
-          () => StreamController<MonitoringUpdate>.broadcast(sync: true),
-        )
-        .stream;
-  }
+        final state = cubit.state as BranchMonitoringSuccess;
 
-  void emitUpdate(String scopeId, MonitoringUpdate update) {
-    _controllers[scopeId]?.add(update);
-  }
-
-  Future<void> dispose() async {
-    for (final controller in _controllers.values) {
-      await controller.close();
-    }
-  }
-}
-
-class FakeGoldPriceRepo implements GoldPriceRepo {
-  final _controller = StreamController<GoldPrice>.broadcast();
-
-  @override
-  Future<GoldPrice> getGoldPrice() async {
-    return GoldPrice(
-      value: 4000,
-      sequence: 0,
-      updatedAt: DateTime.utc(2026, 11, 20),
+        expect(state.isOnline, true);
+        expect(state.snapshot.updatedAt, syncedAt);
+        expect(goldPriceRepo.getGoldPriceCalls, goldCallsBefore + 1);
+      },
     );
-  }
 
-  @override
-  Stream<GoldPrice> watchGoldPrice() => _controller.stream;
+    test('does not refresh when connectivity is lost', () async {
+      await loadCubit();
 
-  Future<void> dispose() => _controller.close();
+      var snapshotCalls = 0;
 
-  void emitPrice(GoldPrice price) {
-    _controller.add(price);
-  }
-}
+      monitoringRepo.snapshotHandler = (scopeId) async {
+        snapshotCalls++;
+        return monitoringRepo.snapshots[scopeId]!;
+      };
 
-class FakeConnectivityService implements ConnectivityService {
-  final _controller = StreamController<bool>.broadcast();
+      connectivity.setOnline(false);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
 
-  final bool _isOnline = true;
+      expect(snapshotCalls, 0);
+    });
+    group('failed branch switch', () {
+      Future<void> failSwitchTo(String scopeId) async {
+        monitoringRepo.snapshotHandler = (id) async {
+          if (id == scopeId) throw const NetworkException();
 
-  @override
-  bool get isOnline => _isOnline;
+          return monitoringRepo.snapshots[id]!;
+        };
 
-  @override
-  Stream<bool> get changes => _controller.stream;
+        await cubit.selectScope(scopeId);
+      }
 
-  Future<void> dispose() => _controller.close();
+      test('emits a failure that keeps the previous dashboard', () async {
+        await loadCubit();
+        await failSwitchTo('a1');
+
+        expect(cubit.state, isA<BranchMonitoringFailure>());
+
+        final failure = cubit.state as BranchMonitoringFailure;
+
+        expect(failure.failedScopeId, 'a1');
+        expect(failure.previous, isNotNull);
+        expect(failure.previous!.selectedScopeId, 'all');
+        expect(failure.isNetworkError, true);
+      });
+
+      test('backFromFailure returns to the previous dashboard', () async {
+        await loadCubit();
+        await failSwitchTo('a1');
+
+        cubit.backFromFailure();
+
+        final state = cubit.state as BranchMonitoringSuccess;
+
+        expect(state.selectedScopeId, 'all');
+        expect(state.snapshot.summary.totalSales, 100000);
+      });
+
+      test(
+        'keeps applying updates of the previous branch after a failure',
+        () async {
+          await loadCubit();
+          await failSwitchTo('a1');
+
+          monitoringRepo.emitUpdate(
+            'all',
+            MonitoringUpdate(
+              scopeId: 'all',
+              sequence: 1,
+              salesDelta: 1000,
+              cashDelta: 500,
+              createdAt: now,
+            ),
+          );
+
+          cubit.backFromFailure();
+
+          final state = cubit.state as BranchMonitoringSuccess;
+
+          expect(state.snapshot.sequence, 1);
+          expect(state.snapshot.summary.totalSales, 101000);
+        },
+      );
+
+      test('retryFromFailure reloads the failed branch', () async {
+        await loadCubit();
+        await failSwitchTo('a1');
+
+        monitoringRepo.snapshotHandler = null;
+
+        await cubit.retryFromFailure();
+
+        final state = cubit.state as BranchMonitoringSuccess;
+
+        expect(state.selectedScopeId, 'a1');
+      });
+
+      test(
+        'retryFromFailure reloads from scratch after a failed first load',
+        () async {
+          monitoringRepo.snapshotHandler = (_) async =>
+              throw const NetworkException();
+
+          await loadCubit();
+
+          expect(cubit.state, isA<BranchMonitoringFailure>());
+          expect((cubit.state as BranchMonitoringFailure).previous, isNull);
+
+          monitoringRepo.snapshotHandler = null;
+
+          await cubit.retryFromFailure();
+
+          final state = cubit.state as BranchMonitoringSuccess;
+
+          expect(state.selectedScopeId, 'all');
+          expect(state.branches.length, 2);
+        },
+      );
+
+      test('backFromFailure does nothing after a failed first load', () async {
+        monitoringRepo.snapshotHandler = (_) async =>
+            throw const NetworkException();
+
+        await loadCubit();
+
+        cubit.backFromFailure();
+
+        expect(cubit.state, isA<BranchMonitoringFailure>());
+      });
+      test('marks non-network errors as not network errors', () async {
+        await loadCubit();
+
+        monitoringRepo.snapshotHandler = (id) async {
+          if (id == 'a1') throw StateError('server error');
+
+          return monitoringRepo.snapshots[id]!;
+        };
+
+        await cubit.selectScope('a1');
+
+        final failure = cubit.state as BranchMonitoringFailure;
+
+        expect(failure.isNetworkError, false);
+      });
+    });
+
+        test('does not emit after close when the first load fails late', () async {
+      final slow = Completer<List<Branch>>();
+
+      monitoringRepo.branchesHandler = () => slow.future;
+
+      final loading = cubit.load();
+
+      await cubit.close();
+
+      slow.completeError(const NetworkException());
+
+      await loading;
+    });
+
+    test('refresh is ignored while a branch is loading', () async {
+      await loadCubit();
+
+      final slow = Completer<MonitoringSnapshot>();
+      var a1Calls = 0;
+
+      monitoringRepo.snapshotHandler = (id) {
+        if (id == 'a1') {
+          a1Calls++;
+          return slow.future;
+        }
+
+        return Future.value(monitoringRepo.snapshots[id]!);
+      };
+
+      final pending = cubit.selectScope('a1');
+
+      await cubit.refresh();
+
+      expect(a1Calls, 1);
+      expect((cubit.state as BranchMonitoringSuccess).isRefreshing, false);
+
+      slow.complete(monitoringRepo.snapshots['a1']!);
+      await pending;
+    });
+  });
+  group('branch switching state', () {
+    test('sets loadingScopeId until the snapshot arrives', () async {
+      await loadCubit();
+
+      final slow = Completer<MonitoringSnapshot>();
+
+      monitoringRepo.snapshotHandler = (id) {
+        if (id == 'a1') return slow.future;
+
+        return Future.value(monitoringRepo.snapshots[id]!);
+      };
+
+      final pending = cubit.selectScope('a1');
+
+      var state = cubit.state as BranchMonitoringSuccess;
+
+      expect(state.loadingScopeId, 'a1');
+      expect(state.selectedScopeId, 'all');
+
+      slow.complete(monitoringRepo.snapshots['a1']!);
+      await pending;
+
+      state = cubit.state as BranchMonitoringSuccess;
+
+      expect(state.loadingScopeId, isNull);
+      expect(state.selectedScopeId, 'a1');
+    });
+
+    test(
+      'ignores a second tap on the branch that is already loading',
+      () async {
+        await loadCubit();
+
+        var a1Calls = 0;
+        final slow = Completer<MonitoringSnapshot>();
+
+        monitoringRepo.snapshotHandler = (id) {
+          if (id == 'a1') {
+            a1Calls++;
+            return slow.future;
+          }
+
+          return Future.value(monitoringRepo.snapshots[id]!);
+        };
+
+        final pending = cubit.selectScope('a1');
+        await cubit.selectScope('a1');
+
+        expect(a1Calls, 1);
+
+        slow.complete(monitoringRepo.snapshots['a1']!);
+        await pending;
+      },
+    );
+
+    test('restores the displayed branch when a second switch fails while '
+        'the first is still loading', () async {
+      await loadCubit();
+
+      final slow = Completer<MonitoringSnapshot>();
+
+      monitoringRepo.snapshotHandler = (id) {
+        if (id == 'a1') return slow.future;
+
+        if (id == 'a2') {
+          return Future<MonitoringSnapshot>.error(const NetworkException());
+        }
+
+        return Future.value(monitoringRepo.snapshots[id]!);
+      };
+
+      final first = cubit.selectScope('a1');
+      await cubit.selectScope('a2');
+
+      final failure = cubit.state as BranchMonitoringFailure;
+
+      expect(failure.failedScopeId, 'a2');
+      expect(failure.previous!.selectedScopeId, 'all');
+      expect(failure.previous!.loadingScopeId, isNull);
+
+      slow.complete(monitoringRepo.snapshots['a1']!);
+      await first;
+
+      expect(cubit.state, isA<BranchMonitoringFailure>());
+
+      cubit.backFromFailure();
+
+      final state = cubit.state as BranchMonitoringSuccess;
+
+      expect(state.selectedScopeId, 'all');
+      expect(state.loadingScopeId, isNull);
+    });
+  });
 }

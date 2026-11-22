@@ -3,15 +3,17 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shop_monitoring_app/core/lifecycle/app_lifecycle_observer.dart';
 import 'package:shop_monitoring_app/core/service_locator.dart';
+import 'package:shop_monitoring_app/core/session/account_manager.dart';
+import 'package:shop_monitoring_app/core/session/account_session.dart';
 import 'package:shop_monitoring_app/core/theme/app_theme.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/manager/cubits/branch_monitoring_cubit/branch_monitoring_cubit.dart';
+import 'package:shop_monitoring_app/features/branch_monitoring/presentation/views/account_scope.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/views/branch_monitoring_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await setupDependencies();
-  startSimulation();
 
   runApp(const ShopMonitoringApp());
 }
@@ -28,18 +30,25 @@ class ShopMonitoringApp extends StatelessWidget {
       locale: const Locale('ar'),
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
       supportedLocales: const [Locale('ar')],
-      home: BlocProvider(
-        create: (_) => getIt<BranchMonitoringCubit>()..load(),
-        child: Builder(
-          builder: (context) {
-            return AppLifecycleObserver(
-              onResumed: () {
-                context.read<BranchMonitoringCubit>().refresh();
+      home: AccountScope(
+        session: getIt<AccountSession>(),
+        createCubit: createBranchMonitoringCubit,
+        builder: (context, accountId) {
+          return AppLifecycleObserver(
+            onResumed: () {
+              context.read<BranchMonitoringCubit>().refresh();
+            },
+            child: BranchMonitoringView(
+              onSwitchAccount: () {
+                getIt<AccountManager>().switchTo(
+                  accountId == AccountSession.defaultAccountId
+                      ? 'shop_2'
+                      : AccountSession.defaultAccountId,
+                );
               },
-              child: const BranchMonitoringView(),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

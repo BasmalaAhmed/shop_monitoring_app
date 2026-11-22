@@ -30,4 +30,6 @@ abstract class MonitoringLocalDataSource {
   Future<GoldPriceModel?> getCachedGoldPrice({
     required String accountId,
   });
+
+    Future<void> clearAccount({required String accountId});
 }

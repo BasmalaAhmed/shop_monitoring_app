@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shop_monitoring_app/core/errors/network_exception.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/data/datasources/connectivity_service.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/branch.dart';
 import 'package:shop_monitoring_app/features/branch_monitoring/domain/entities/gold_price.dart';
@@ -56,7 +57,14 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
       _watchGoldPrice();
       _watchConnectivity();
     } catch (error) {
-      emit(BranchMonitoringFailure(error.toString()));
+      if (isClosed) return;
+
+      emit(
+        BranchMonitoringFailure(
+          error.toString(),
+          isNetworkError: error is NetworkException,
+        ),
+      );
     }
   }
 
@@ -65,12 +73,16 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
 
     if (currentState is! BranchMonitoringSuccess) return;
 
-    if (scopeId == _selectedScopeId) return;
+    final target = currentState.loadingScopeId ?? currentState.selectedScopeId;
 
-    final previousScopeId = _selectedScopeId;
+    if (scopeId == target) return;
+
+    final previousScopeId = currentState.selectedScopeId;
     final previousSnapshot = _currentSnapshot;
 
     final requestId = ++_requestId;
+
+    emit(currentState.copyWith(loadingScopeId: scopeId));
 
     try {
       await _selectScope(
@@ -92,8 +104,9 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
       emit(
         BranchMonitoringFailure(
           error.toString(),
-          previous: currentState,
+          previous: currentState.copyWith(clearLoadingScope: true),
           failedScopeId: scopeId,
+          isNetworkError: error is NetworkException,
         ),
       );
     }
@@ -116,7 +129,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
     );
   }
 
-    Future<void> retryFromFailure() async {
+  Future<void> retryFromFailure() async {
     final failure = state;
 
     if (failure is! BranchMonitoringFailure) return;
@@ -382,6 +395,7 @@ class BranchMonitoringCubit extends Cubit<BranchMonitoringState> {
   Future<void> refresh() async {
     final currentState = state;
     if (currentState is! BranchMonitoringSuccess) return;
+    if (currentState.loadingScopeId != null) return;
 
     final refreshRequestId = ++_refreshRequestId;
     final requestId = _requestId;

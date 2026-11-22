@@ -157,4 +157,23 @@ class SqfliteMonitoringLocalDataSource implements MonitoringLocalDataSource {
       updatedAt: DateTime.parse(row['updated_at'] as String),
     );
   }
+
+  @override
+  Future<void> clearAccount({required String accountId}) async {
+    final db = await _database.database;
+
+    await db.transaction((txn) async {
+      for (final table in const [
+        'branches',
+        'monitoring_snapshots',
+        'gold_prices',
+      ]) {
+        await txn.delete(
+          table,
+          where: 'account_id = ?',
+          whereArgs: [accountId],
+        );
+      }
+    });
+  }
 }

@@ -10,7 +10,9 @@ import 'package:shop_monitoring_app/features/branch_monitoring/presentation/widg
 import 'package:shop_monitoring_app/features/branch_monitoring/presentation/widgets/summary/summary_grid.dart';
 
 class BranchMonitoringView extends StatelessWidget {
-  const BranchMonitoringView({super.key});
+  const BranchMonitoringView({super.key, this.onSwitchAccount});
+
+  final VoidCallback? onSwitchAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +32,10 @@ class BranchMonitoringView extends StatelessWidget {
                     context.read<BranchMonitoringCubit>().backFromFailure();
                   }
                 },
-                child: FailureView(canGoBack: state.previous != null),
+                child: FailureView(
+                  canGoBack: state.previous != null,
+                  isNetworkError: state.isNetworkError,
+                ),
               );
             }
 
@@ -52,7 +57,10 @@ class BranchMonitoringView extends StatelessWidget {
                             DashboardHeaderSection(
                               isOnline: state.isOnline,
                               branches: state.branches,
-                              selectedScopeId: state.selectedScopeId,
+                              selectedScopeId:
+                                  state.loadingScopeId ?? state.selectedScopeId,
+                              isLoadingBranch: state.loadingScopeId != null,
+                              onSwitchAccount: onSwitchAccount,
                               onBranchChanged: (scopeId) {
                                 context
                                     .read<BranchMonitoringCubit>()
@@ -104,20 +112,28 @@ class BranchMonitoringView extends StatelessWidget {
                               const SizedBox(height: 16),
                             ],
 
-                            SummaryGrid(
-                              totalSales: state.snapshot.summary.totalSales,
-                              totalCash: state.snapshot.summary.totalCash,
-                            ),
-                            const SizedBox(height: 16),
-
-                            GoldPriceCard(
-                              price: state.goldPrice?.value,
-                              updatedAt: state.goldPrice?.updatedAt,
-                            ),
-                            const SizedBox(height: 24),
-
-                            RecentOperationsSection(
-                              operations: state.snapshot.recentOperations,
+                            AnimatedOpacity(
+                              opacity: state.loadingScopeId != null ? 0.5 : 1,
+                              duration: const Duration(milliseconds: 150),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  SummaryGrid(
+                                    totalSales:
+                                        state.snapshot.summary.totalSales,
+                                    totalCash: state.snapshot.summary.totalCash,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  GoldPriceCard(
+                                    price: state.goldPrice?.value,
+                                    updatedAt: state.goldPrice?.updatedAt,
+                                  ),
+                                  const SizedBox(height: 24),
+                                  RecentOperationsSection(
+                                    operations: state.snapshot.recentOperations,
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),

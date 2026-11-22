@@ -14,19 +14,24 @@ import 'package:shop_monitoring_app/features/branch_monitoring/data/models/recen
 const String allScope = 'all';
 
 class MockMonitoringApi implements MonitoringApi, GoldPriceApi {
-  MockMonitoringApi({required this.connectivity, Random? random})
-    : _random = random ?? Random() {
+  MockMonitoringApi({
+    required this.connectivity,
+    List<BranchModel>? branches,
+    Random? random,
+  }) : _branches = branches ?? defaultBranches,
+       _random = random ?? Random() {
     _initialize();
   }
 
-  final ConnectivityService connectivity;
-  final Random _random;
-
-  final List<BranchModel> _branches = const [
+  static const List<BranchModel> defaultBranches = [
     BranchModel(id: 'a1', name: 'فرع القاهرة'),
     BranchModel(id: 'a2', name: 'فرع الإسكندرية'),
     BranchModel(id: 'a3', name: 'فرع المنصورة'),
   ];
+
+  final ConnectivityService connectivity;
+  final Random _random;
+  final List<BranchModel> _branches;
 
   final Map<String, _ScopeState> _scopes = {};
 
@@ -72,7 +77,9 @@ class MockMonitoringApi implements MonitoringApi, GoldPriceApi {
 
   @override
   Future<MonitoringSnapshotModel> fetchSnapshot(String scopeId) async {
-    await _simulateNetworkDelay();
+    await _simulateNetworkDelay(
+      delay: scopeId == _branches.first.id ? _slowScopeDelay : _defaultDelay,
+    );
 
     final state = _scopes[scopeId];
 
@@ -115,8 +122,12 @@ class MockMonitoringApi implements MonitoringApi, GoldPriceApi {
     return _goldController.stream;
   }
 
-  Future<void> _simulateNetworkDelay() async {
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+  static const Duration _defaultDelay = Duration(milliseconds: 300);
+
+  static const Duration _slowScopeDelay = Duration(seconds: 2);
+
+  Future<void> _simulateNetworkDelay({Duration delay = _defaultDelay}) async {
+    await Future<void>.delayed(delay);
 
     if (!connectivity.isOnline) {
       throw const NetworkException();
